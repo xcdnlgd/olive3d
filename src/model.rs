@@ -4,7 +4,10 @@ use std::{
     path::Path,
 };
 
-use crate::geometry::{Vector2, Vector3};
+use crate::{
+    geometry::{Vector2, Vector3},
+    ppm::load_ppm_file_to_buffer,
+};
 
 pub struct Model {
     verts: Vec<Vector3>,     // array of vertices
@@ -13,6 +16,7 @@ pub struct Model {
     facet_vrt: Vec<usize>,
     facet_tex: Vec<usize>, // per-triangle indices in the above arrays
     facet_nrm: Vec<usize>,
+    diffuse_map: Option<(Vec<u32>, u32, u32)>,
 }
 
 impl Model {
@@ -80,7 +84,11 @@ impl Model {
             facet_vrt,
             facet_tex,
             facet_nrm,
+            diffuse_map: None,
         }
+    }
+    pub fn load_diffuse_map(&mut self, path: impl AsRef<Path>) {
+        self.diffuse_map = Some(load_ppm_file_to_buffer(path));
     }
     pub fn nverts(&self) -> usize {
         self.verts.len()
@@ -90,5 +98,8 @@ impl Model {
     }
     pub fn vert(&self, iface: usize, nthvert: usize) -> Vector3 {
         self.verts[self.facet_vrt[iface * 3 + nthvert]].clone()
+    }
+    pub fn uv(&self, iface: usize, nthvert: usize) -> Vector2 {
+        self.tex_coord[self.facet_tex[iface * 3 + nthvert]].clone()
     }
 }

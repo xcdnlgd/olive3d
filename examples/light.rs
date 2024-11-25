@@ -1,3 +1,4 @@
+use lazy_static::lazy_static;
 use olive3d::{
     geometry::{Cross, Dot, Vector3},
     model::Model,
@@ -7,17 +8,20 @@ use olive3d::{
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 800;
 
-fn main() {
-    let mut model = Model::new("./obj/african_head.obj");
-    model.load_diffuse_map("./obj/african_head_diffuse.ppm");
-    let model = model;
-    let mut buffer = [0u32; WIDTH as usize * HEIGHT as usize];
-    let mut z_buffer = [f32::MIN; WIDTH as usize * HEIGHT as usize];
+lazy_static!{
+    static ref model: Model = Model::new("./obj/african_head.obj");
+}
 
-    let mut renderer = Renderer::new(&mut buffer, &mut z_buffer, WIDTH, HEIGHT);
-    let mut light_dir = Vector3::new(0.0, -1.0, -1.0);
-    light_dir = light_dir.normalize();
-    renderer.fill(0xff1818ff);
+static mut T: f32 = 0.0;
+
+pub fn render(buffer: &mut [u32], z_buffer: &mut [f32], dt: f32) {
+    let mut renderer = Renderer::new(buffer, z_buffer, WIDTH, HEIGHT);
+    let light_dir =  unsafe {
+        T += dt;
+        let light_dir = Vector3::new(T.cos(), T.sin(), -1.0);
+        light_dir.normalize()
+    };
+    renderer.fill(0xff000000);
     for i in 0..model.nfaces() {
         let mut s = Vec::with_capacity(3);
         let mut world_coords = Vec::with_capacity(3);
@@ -33,7 +37,7 @@ fn main() {
         n = n.normalize();
         let intensity = n.dot(&light_dir);
         if intensity > 0.0 {
-            renderer.fill_triangle(&s, |bc| {
+            renderer.fill_triangle(&s, |_| {
                 let pixel: u32 = 0xffffffff;
                 let mut new_pixel = 0xff000000;
                 for i in 0..3 {
@@ -44,8 +48,12 @@ fn main() {
                 new_pixel
             });
         } else {
-            renderer.fill_triangle(&s, |bc| 0xff000000);
+            renderer.fill_triangle(&s, |_| 0xff000000);
         }
     }
-    renderer.save_to_ppm_file("output/black.ppm").unwrap();
+    // renderer.save_to_ppm_file("output/black.ppm").unwrap();
 }
+
+pub fn init() {}
+
+include!("../common/main.rs");
