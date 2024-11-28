@@ -37,7 +37,7 @@ enum NowReading {
     Data,
 }
 
-pub fn load_ppm_file_to_buffer(path: impl AsRef<Path>) -> (Vec<u32>, u32, u32) {
+pub fn load_ppm_file_to_buffer(path: impl AsRef<Path>) -> Image {
     let file = File::open(path).unwrap();
     let mut now_reading = NowReading::MagicNumber;
     let mut file = BufReader::new(file);
@@ -87,5 +87,27 @@ pub fn load_ppm_file_to_buffer(path: impl AsRef<Path>) -> (Vec<u32>, u32, u32) {
         buffer.push(pixel);
     }
     assert_eq!(buffer.len(), (width * height) as usize);
-    (buffer, width, height)
+    Image {
+        buffer,
+        width,
+        height,
+    }
+}
+
+pub struct Image {
+    pub buffer: Vec<u32>,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl Image {
+    pub fn vflip(&mut self) {
+        for y in 0..self.height / 2 {
+            for x in 0..self.width {
+                let a = x + y * self.width;
+                let b = x + (self.height - 1 - y) * self.width;
+                self.buffer.swap(a as usize, b as usize);
+            }
+        }
+    }
 }

@@ -2,7 +2,7 @@
 use std::path::Path;
 
 use crate::{
-    geometry::{Line2D, Ray, Vector3},
+    geometry::{Cross, Line2D, Ray, Vector3},
     ppm::save_buffer_to_ppm_file,
 };
 
@@ -26,7 +26,7 @@ impl<'b> Renderer<'b> {
         }
     }
     #[inline]
-    fn draw_pixel_unchecked(&mut self, x: u32, y: u32, pixel: u32) {
+    pub fn draw_pixel_unchecked(&mut self, x: u32, y: u32, pixel: u32) {
         self.buffer[(y * self.stride + x) as usize] = pixel;
     }
     #[inline]
@@ -59,11 +59,7 @@ impl<'b> Renderer<'b> {
             self.draw_pixel_unchecked(x as u32, y as u32, pixel)
         }
     }
-    pub fn fill_triangle(
-        &mut self,
-        verts: &[Vector3],
-        shader: impl Fn(Vector3) -> u32
-    ) {
+    pub fn fill_triangle(&mut self, verts: &[Vector3], shader: impl Fn(Vector3) -> u32) {
         let ((x_min, y_min), (x_max, y_max)) = triangle_bunding_box(verts);
         if let Some(((x_min, y_min), (x_max, y_max))) = normalize_rect(
             x_min as i32,
@@ -148,23 +144,14 @@ fn normalize_rect(
     Some(((x0 as u32, y0 as u32), (x1 as u32, y1 as u32)))
 }
 
-// return (x, y, z)
-#[inline]
-fn vector3_a_cross_b(ax: f32, ay: f32, az: f32, bx: f32, by: f32, bz: f32) -> (f32, f32, f32) {
-    let x = ay * bz - az * by;
-    let y = az * bx - ax * bz;
-    let z = ax * by - ay * bx;
-    (x, y, z)
-}
-
 // return (u, v, w)
 #[inline]
 fn barycentric(x: f32, y: f32, x0: f32, y0: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> Vector3 {
     // Barycentric coordinate system
     // https://github.com/ssloy/tinyrenderer/wiki/Lesson-2:-Triangle-rasterization-and-back-face-culling#:~:text=It%20means%20that%20we%20are%20looking%20for%20a%20vector%20(u%2Cv%2C1)%20that%20is%20orthogonal%20to%20(ABx%2CACx%2CPAx)%20and%20(ABy%2CACy%2CPAy)%20at%20the%20same%20time!
-    let (x, y, z) = vector3_a_cross_b(x1 - x0, x2 - x0, x0 - x, y1 - y0, y2 - y0, y0 - y);
-    let v = x / z;
-    let w = y / z;
-    let u = 1.0 - w - v;
-    Vector3::new(u, v, w)
+    let u = Vector3::new(x2 - x0, x1 - x0, x0 - x).cross(Vector3::new(y2 - y0, y1 - y0, y0 - y));
+    if u.z().abs() < 1.0 {
+        return Vector3::new(-1.0, 1.0, 1.0);
+    }
+    Vector3::new(1.0 - (u.x() + u.y()) / u.z(), u.y() / u.z(), u.x() / u.z())
 }

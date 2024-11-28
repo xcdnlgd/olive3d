@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     geometry::{Vector2, Vector3},
-    ppm::load_ppm_file_to_buffer,
+    ppm::{load_ppm_file_to_buffer, Image},
 };
 
 pub struct Model {
@@ -16,7 +16,7 @@ pub struct Model {
     facet_vrt: Vec<usize>,
     facet_tex: Vec<usize>, // per-triangle indices in the above arrays
     facet_nrm: Vec<usize>,
-    diffuse_map: Option<(Vec<u32>, u32, u32)>,
+    pub diffuse_map: Option<Image>,
 }
 
 impl Model {
@@ -56,7 +56,6 @@ impl Model {
                     for i in 0..2 {
                         uv[i] = parts[i + 1].parse().unwrap();
                     }
-                    uv[1] = 1f32 - uv[1];
                     tex_coord.push(uv);
                 }
                 "f" => {
@@ -88,7 +87,9 @@ impl Model {
         }
     }
     pub fn load_diffuse_map(&mut self, path: impl AsRef<Path>) {
-        self.diffuse_map = Some(load_ppm_file_to_buffer(path));
+        let mut img = load_ppm_file_to_buffer(path);
+        img.vflip();
+        self.diffuse_map = Some(img);
     }
     pub fn nverts(&self) -> usize {
         self.verts.len()
