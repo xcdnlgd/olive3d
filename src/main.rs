@@ -1,11 +1,38 @@
 use olive3d::{
-    geometry::{Cross, Dot, Vector2, Vector3},
+    geometry::{Cross, Dot, Matrix, Matrix4, Vector2, Vector3},
     model::Model,
     renderer::Renderer,
 };
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 800;
+const DEPTH: u32 = 255;
+
+fn m2v(m: &Matrix<4, 1>) -> Vector3 {
+    Vector3::new(m[0][0] / m[3][0], m[1][0] / m[3][0], m[2][0] / m[3][0])
+}
+
+#[rustfmt::skip]
+fn v2m(v: &Vector3) -> Matrix<4, 1> {
+    [
+        [v.x()],
+        [v.y()],
+        [v.z()],
+        [  1.0],
+    ].into()
+}
+
+#[rustfmt::skip]
+fn viewport(x: f32, y: f32, w: f32, h: f32) -> Matrix4 {
+    let d = DEPTH as f32;
+    [
+        [w/2.0,   0.0,   0.0, x+w/2.0],
+        [  0.0, -h/2.0,   0.0, y+h/2.0],
+        [  0.0,   0.0, d/2.0,   d/2.0],
+        [  0.0,   0.0,   0.0,     1.0],
+    ]
+    .into()
+}
 
 fn main() {
     let mut model = Model::new("./obj/african_head.obj");
@@ -15,24 +42,32 @@ fn main() {
     let mut z_buffer = [f32::MIN; WIDTH as usize * HEIGHT as usize];
 
     let mut renderer = Renderer::new(&mut buffer, &mut z_buffer, WIDTH, HEIGHT);
-    let mut light_dir = Vector3::new(0.0, -1.0, -1.0);
-    light_dir = light_dir.normalize();
+    let light_dir = Vector3::new(0.0, 0.0, -1.0);
+    let camera = Vector3::new(0.0, 0.0, 3.0);
+
+    let mut projection = Matrix4::identity();
+    projection[3][2] = -1.0 / camera.z();
+    let viewport = viewport(
+        WIDTH as f32 / 8.0,
+        HEIGHT as f32 / 8.0,
+        WIDTH as f32 * 3.0 / 4.0,
+        HEIGHT as f32 * 3.0 / 4.0,
+    );
+
     renderer.fill(0xff000000);
     for i in 0..model.nfaces() {
-        let mut s = Vec::with_capacity(3);
+        let mut screen_coords = Vec::with_capacity(3);
         let mut world_coords = Vec::with_capacity(3);
         for j in 0..3 {
             let v = model.vert(i, j);
-            let x = (v.x() + 1f32) * WIDTH as f32 / 2f32;
-            let y = (-v.y() + 1f32) * HEIGHT as f32 / 2f32;
-            s.push(Vector3::new(x, y, v.z()));
+            screen_coords.push(m2v(&(&viewport * &projection * v2m(&v))));
             world_coords.push(v);
         }
         let mut n =
             (&world_coords[2] - &world_coords[0]).cross(&world_coords[1] - &world_coords[0]);
         n = n.normalize();
         let intensity = n.dot(&light_dir);
-        renderer.fill_triangle(&s, |bc| {
+        renderer.fill_triangle(&screen_coords, |bc| {
             let mut uv = Vector2::zero();
             for j in 0..3 {
                 let c_uv = model.uv(i, j);

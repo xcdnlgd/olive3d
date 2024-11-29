@@ -1,4 +1,7 @@
-use std::ops::{Add, Div, Index, IndexMut, Mul, Sub};
+use std::{
+    fmt::Display,
+    ops::{Add, Div, Index, IndexMut, Mul, Sub},
+};
 
 #[derive(Clone)]
 pub struct Line2D {
@@ -246,20 +249,20 @@ impl<const D: usize> IndexMut<usize> for Vector<D> {
 }
 
 macro_rules! impl_bin_op {
-    (impl$(<const $T:ident: $t:ty>)? $Op:ident<$rhs:ty> for $lhs:ty, $op:ident, $output:ty) => {
-        impl$(<const $T: $t>)? $Op<$rhs> for $lhs {
+    (impl$(<$(const $T:ident: $t:ty),+>)? $Op:ident<$rhs:ty> for $lhs:ty, $op:ident, $output:ty) => {
+        impl$(<$(const $T: $t),+>)? $Op<$rhs> for $lhs {
             type Output = $output;
             fn $op(self, rhs: $rhs) -> Self::Output {
                 (&self).$op(&rhs)
             }
         }
-        impl$(<const $T: $t>)? $Op<&$rhs> for $lhs {
+        impl$(<$(const $T: $t),+>)? $Op<&$rhs> for $lhs {
             type Output = $output;
             fn $op(self, rhs: &$rhs) -> Self::Output {
                 (&self).$op(rhs)
             }
         }
-        impl$(<const $T: $t>)? $Op<$rhs> for &$lhs {
+        impl$(<$(const $T: $t),+>)? $Op<$rhs> for &$lhs {
             type Output = $output;
             fn $op(self, rhs: $rhs) -> Self::Output {
                 (self).$op(&rhs)
@@ -372,3 +375,78 @@ impl Cross<&Vector3> for &Vector3 {
     }
 }
 impl_bin_op!(impl Cross<Vector3> for Vector3, cross, Vector3);
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Matrix<const R: usize, const C: usize> {
+    pub rows: [[f32; C]; R],
+}
+
+impl<const R: usize, const C: usize> Matrix<R, C> {
+    #[inline]
+    pub fn zero() -> Self {
+        Self {
+            rows: [[0f32; C]; R],
+        }
+    }
+    #[inline]
+    pub fn from_rows(rows: [[f32; C]; R]) -> Self {
+        Self::from(rows)
+    }
+}
+impl<const N: usize> Matrix<N, N> {
+    #[inline]
+    pub fn identity() -> Self {
+        let mut mat = Self::zero();
+        for i in 0..N {
+            mat[i][i] = 1f32;
+        }
+        mat
+    }
+}
+
+impl<const R: usize, const C: usize> From<[[f32; C]; R]> for Matrix<R, C> {
+    fn from(rows: [[f32; C]; R]) -> Self {
+        Self { rows }
+    }
+}
+impl<const R: usize, const C: usize> Display for Matrix<R, C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output = String::new();
+        output += "[\n";
+        for row in self.rows.iter() {
+            output += &format!("    {:.5?},\n", row);
+        }
+        output += "]";
+        write!(f, "{output}")
+    }
+}
+impl<const R: usize, const C: usize> Index<usize> for Matrix<R, C> {
+    type Output = [f32; C];
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.rows[index]
+    }
+}
+impl<const R: usize, const C: usize> IndexMut<usize> for Matrix<R, C> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.rows[index]
+    }
+}
+impl<const A: usize, const B: usize, const C: usize> Mul<&Matrix<B, C>> for &Matrix<A, B> {
+    type Output = Matrix<A, C>;
+    fn mul(self, rhs: &Matrix<B, C>) -> Self::Output {
+        let mut result = Self::Output::zero();
+        for a in 0..A {
+            for c in 0..C {
+                for b in 0..B {
+                    result[a][c] += self[a][b] * rhs[b][c];
+                }
+            }
+        }
+        result
+    }
+}
+impl_bin_op!(impl<const A: usize, const B: usize, const C: usize> Mul<Matrix<B, C>> for Matrix<A, B>, mul, Matrix<A, C>);
+
+pub type Matrix2 = Matrix<2, 2>;
+pub type Matrix3 = Matrix<3, 3>;
+pub type Matrix4 = Matrix<4, 4>;
