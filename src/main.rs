@@ -1,5 +1,5 @@
 use olive3d::{
-    geometry::{Cross, Dot, Matrix, Matrix4, Vector2, Vector3},
+    geometry::{Dot, Matrix, Matrix4, Vector2, Vector3},
     model::Model,
     renderer::Renderer,
 };
@@ -57,22 +57,20 @@ fn main() {
     renderer.fill(0xff000000);
     for i in 0..model.nfaces() {
         let mut screen_coords = Vec::with_capacity(3);
-        let mut world_coords = Vec::with_capacity(3);
+        let mut intensities = Vec::with_capacity(3);
         for j in 0..3 {
             let v = model.vert(i, j);
             screen_coords.push(m2v(&(&viewport * &projection * v2m(&v))));
-            world_coords.push(v);
+            intensities.push(model.normal(i, j).normalize().dot(&light_dir));
         }
-        let mut n =
-            (&world_coords[2] - &world_coords[0]).cross(&world_coords[1] - &world_coords[0]);
-        n = n.normalize();
-        let intensity = n.dot(&light_dir);
         renderer.fill_triangle(&screen_coords, |bc| {
             let mut uv = Vector2::zero();
+            let mut intensity = 0.0;
             for j in 0..3 {
                 let c_uv = model.uv(i, j);
                 uv[0] += c_uv[0] * bc[j];
                 uv[1] += c_uv[1] * bc[j];
+                intensity += intensities[j] * bc[j];
             }
             let pixel: u32 = if let Some(ref diffuse_map) = model.diffuse_map {
                 let x = uv.x() * diffuse_map.width as f32;

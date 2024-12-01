@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 use olive3d::{
-    geometry::{Cross, Dot, Matrix, Matrix4, Vector2, Vector3},
+    geometry::{Dot, Matrix, Matrix4, Vector2, Vector3},
     model::Model,
     renderer::Renderer,
 };
@@ -68,22 +68,20 @@ pub fn render(buffer: &mut [u32], z_buffer: &mut [f32], dt: f32) {
     renderer.fill(0xff000000);
     for i in 0..MODEL.nfaces() {
         let mut screen_coords = Vec::with_capacity(3);
-        let mut world_coords = Vec::with_capacity(3);
+        let mut intensities = Vec::with_capacity(3);
         for j in 0..3 {
             let v = MODEL.vert(i, j);
             screen_coords.push(m2v(&(&(*transform) * v2m(&v))));
-            world_coords.push(v);
+            intensities.push(MODEL.normal(i, j).normalize().dot(&light_dir));
         }
-        let mut n =
-            (&world_coords[2] - &world_coords[0]).cross(&world_coords[1] - &world_coords[0]);
-        n = n.normalize();
-        let intensity = n.dot(&light_dir);
         renderer.fill_triangle(&screen_coords, |bc| {
             let mut uv = Vector2::zero();
+            let mut intensity = 0.0;
             for j in 0..3 {
                 let c_uv = MODEL.uv(i, j);
                 uv[0] += c_uv[0] * bc[j];
                 uv[1] += c_uv[1] * bc[j];
+                intensity += intensities[j] * bc[j];
             }
             let pixel: u32 = if let Some(ref diffuse_map) = MODEL.diffuse_map {
                 let x = uv.x() * diffuse_map.width as f32;

@@ -103,4 +103,7 @@ impl Model {
     pub fn uv(&self, iface: usize, nthvert: usize) -> Vector2 {
         self.tex_coord[self.facet_tex[iface * 3 + nthvert]].clone()
     }
+    pub fn normal(&self, iface: usize, nthvert: usize) -> Vector3 {
+        self.norms[self.facet_nrm[iface * 3 + nthvert]].clone()
+    }
 }
