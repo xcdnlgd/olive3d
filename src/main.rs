@@ -65,7 +65,7 @@ fn main() {
 
     let mut renderer = Renderer::new(&mut buffer, &mut z_buffer, WIDTH, HEIGHT);
     let light_dir = Vector3::new(1.0, -1.0, 1.0);
-    let eye = Vector3::new(1.0, 1.0, 3.0);
+    let eye = Vector3::new(0.5, 0.5, 1.0);
     let center = Vector3::new(0.0, 0.0, 0.0);
 
     let model_view = lookat(&eye, &center, &Vector3::new(0.0, 1.0, 0.0));

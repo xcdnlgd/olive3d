@@ -61,10 +61,10 @@ impl<'b> Renderer<'b> {
     }
     pub fn fill_triangle(&mut self, verts: &[Vector3], shader: impl Fn(Vector3) -> u32) {
         let ((x_min, y_min), (x_max, y_max)) = triangle_bunding_box(verts);
-        let x_min = (x_min.round() as i32).max(0) as u32;
-        let y_min = (y_min.round() as i32).max(0) as u32;
-        let x_max = (x_max.round() as i32).min(self.width as i32) as u32;
-        let y_max = (y_max.round() as i32).min(self.height as i32) as u32;
+        let x_min = (x_min.round() as i32).clamp(0, self.width as i32) as u32;
+        let y_min = (y_min.round() as i32).clamp(0, self.height as i32) as u32;
+        let x_max = (x_max.round() as i32).clamp(0, self.width as i32) as u32;
+        let y_max = (y_max.round() as i32).clamp(0, self.height as i32) as u32;
         for y in y_min..y_max {
             for x in x_min..x_max {
                 let bc = barycentric(
