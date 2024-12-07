@@ -1,3 +1,4 @@
+use lazy_static::lazy_static;
 use olive3d::{
     geometry::{Cross, Dot, Matrix, Matrix4, Vector2, Vector3},
     model::Model,
@@ -56,17 +57,25 @@ fn lookat(eye: &Vector3, center: &Vector3, up: &Vector3) -> Matrix4 {
     minv * tr
 }
 
-fn main() {
-    let mut model = Model::new("./obj/african_head.obj");
-    model.load_diffuse_map("./obj/african_head_diffuse.ppm");
-    let model = model;
-    let mut buffer = [0u32; WIDTH as usize * HEIGHT as usize];
-    let mut z_buffer = [f32::MIN; WIDTH as usize * HEIGHT as usize];
+lazy_static! {
+    static ref MODEL: Model = {
+        let mut model = Model::new("./obj/african_head.obj");
+        model.load_diffuse_map("./obj/african_head_diffuse.ppm");
+        model
+    };
+}
 
-    let mut renderer = Renderer::new(&mut buffer, &mut z_buffer, WIDTH, HEIGHT);
-    let light_dir = Vector3::new(1.0, -1.0, 1.0);
-    let eye = Vector3::new(1.0, 1.0, 3.0);
+static mut T: f32 = 0.0;
+
+pub fn render(buffer: &mut [u32], z_buffer: &mut [f32], dt: f32) {
+    let mut renderer = Renderer::new(buffer, z_buffer, WIDTH, HEIGHT);
+    // let light_dir = Vector3::new(0.0, 0.0, -1.0);
+    let eye = unsafe {
+        T += dt;
+        Vector3::new(T.cos(), T.sin(), 3.0)
+    };
     let center = Vector3::new(0.0, 0.0, 0.0);
+    let light_dir = (&eye - &center).normalize();
 
     let model_view = lookat(&eye, &center, &Vector3::new(0.0, 1.0, 0.0));
 
@@ -81,27 +90,26 @@ fn main() {
     );
 
     let transform = viewport * projection * model_view;
-    // let transform = viewport * projection;
 
     renderer.fill(0xff000000);
-    for i in 0..model.nfaces() {
+    for i in 0..MODEL.nfaces() {
         let mut screen_coords = Vec::with_capacity(3);
         let mut intensities = Vec::with_capacity(3);
         for j in 0..3 {
-            let v = model.vert(i, j);
+            let v = MODEL.vert(i, j);
             screen_coords.push(m2v(&(&transform * v2m(&v))));
-            intensities.push(model.normal(i, j).normalize().dot(&light_dir));
+            intensities.push(MODEL.normal(i, j).normalize().dot(&light_dir));
         }
         renderer.fill_triangle(&screen_coords, |bc| {
             let mut uv = Vector2::zero();
             let mut intensity = 0.0;
             for j in 0..3 {
-                let c_uv = model.uv(i, j);
+                let c_uv = MODEL.uv(i, j);
                 uv[0] += c_uv[0] * bc[j];
                 uv[1] += c_uv[1] * bc[j];
                 intensity += intensities[j] * bc[j];
             }
-            let pixel: u32 = if let Some(ref diffuse_map) = model.diffuse_map {
+            let pixel: u32 = if let Some(ref diffuse_map) = MODEL.diffuse_map {
                 let x = uv.x() * diffuse_map.width as f32;
                 let y = uv.y() * diffuse_map.height as f32;
                 diffuse_map.buffer[x as usize + y as usize * diffuse_map.width as usize]
@@ -117,5 +125,9 @@ fn main() {
             new_pixel
         });
     }
-    renderer.save_to_ppm_file("output/black.ppm").unwrap();
+    // renderer.save_to_ppm_file("output/black.ppm").unwrap();
 }
+
+pub fn init() {}
+
+include!("../common/main.rs");

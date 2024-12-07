@@ -27,10 +27,10 @@ fn v2m(v: &Vector3) -> Matrix<4, 1> {
 fn viewport(x: f32, y: f32, w: f32, h: f32) -> Matrix4 {
     let d = DEPTH as f32;
     [
-        [w/2.0,   0.0,   0.0, x+w/2.0],
+        [w/2.0,    0.0,   0.0, x+w/2.0],
         [  0.0, -h/2.0,   0.0, y+h/2.0],
-        [  0.0,   0.0, d/2.0,   d/2.0],
-        [  0.0,   0.0,   0.0,     1.0],
+        [  0.0,    0.0, d/2.0,   d/2.0],
+        [  0.0,    0.0,   0.0,     1.0],
     ]
     .into()
 }
@@ -94,7 +94,7 @@ pub fn render(buffer: &mut [u32], z_buffer: &mut [f32], dt: f32) {
             for i in 0..3 {
                 let mut part = ((pixel >> (8 * i)) & 0xff) as f32;
                 part *= intensity.abs();
-                new_pixel |= ((part as u32) & 0xff) << (8 * i)
+                new_pixel |= ((part.clamp(0.0, 255.0) as u32) & 0xff) << (8 * i)
             }
             new_pixel
         });
