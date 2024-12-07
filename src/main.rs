@@ -1,121 +1,89 @@
+use std::ops::Neg;
+
 use olive3d::{
-    geometry::{Cross, Dot, Matrix, Matrix4, Vector2, Vector3},
+    geometry::{m2v, v2m, Matrix, Matrix4, Vector3},
     model::Model,
-    renderer::Renderer,
+    renderer::{self, lookat, viewport, Renderer, Shader},
 };
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 800;
 const DEPTH: u32 = 255;
 
-fn m2v(m: &Matrix<4, 1>) -> Vector3 {
-    Vector3::new(m[0][0] / m[3][0], m[1][0] / m[3][0], m[2][0] / m[3][0])
+struct GouraudShader {
+    model: Model,
+    transform: Matrix4,
+    light_dir: Vector3,
+    varying_uv: Matrix<3, 2>,
 }
+impl Shader for GouraudShader {
+    fn vertex(&mut self, iface: usize, nthvert: usize) -> Vector3 {
+        self.varying_uv
+            .set_row(nthvert, self.model.uv(iface, nthvert));
+        let v = self.model.vert(iface, nthvert);
+        m2v(&(&self.transform * v2m(&v)))
+    }
 
-#[rustfmt::skip]
-fn v2m(v: &Vector3) -> Matrix<4, 1> {
-    [
-        [v.x()],
-        [v.y()],
-        [v.z()],
-        [  1.0],
-    ].into()
-}
-
-#[rustfmt::skip]
-fn viewport(x: f32, y: f32, w: f32, h: f32) -> Matrix4 {
-    let d = DEPTH as f32;
-    [
-        [w/2.0,    0.0,   0.0, x+w/2.0],
-        [  0.0, -h/2.0,   0.0, y+h/2.0],
-        [  0.0,    0.0, d/2.0,   d/2.0],
-        [  0.0,    0.0,   0.0,     1.0],
-    ]
-    .into()
-}
-
-#[rustfmt::skip]
-fn lookat(eye: &Vector3, center: &Vector3, up: &Vector3) -> Matrix4 {
-    let z = (eye - center).normalize();
-    let x = up.cross(&z).normalize();
-    let y = (&z).cross(&x).normalize();
-    // TODO: figure it out
-    let minv = Matrix::from_rows([
-        [x[0], x[1], x[2], 0.0],
-        [y[0], y[1], y[2], 0.0],
-        [z[0], z[1], z[2], 0.0],
-        [ 0.0,  0.0,  0.0, 1.0],
-    ]);
-    // move center to [0,0,0]
-    let tr = Matrix::from_rows([
-        [1.0, 0.0, 0.0, -center[0]],
-        [0.0, 1.0, 0.0, -center[1]],
-        [0.0, 0.0, 1.0, -center[2]],
-        [0.0, 0.0, 0.0,        1.0],
-    ]);
-    minv * tr
+    fn fregment(&mut self, bc: &Vector3) -> Option<u32> {
+        let uv = (Matrix::from_row_vector(bc.clone()) * &self.varying_uv).to_row_vector();
+        let n = self.model.normal_uv(&uv).normalize();
+        let intensity = n.dot(&self.light_dir).neg().max(0.0);
+        let pixel: u32 = self.model.diffuse(&uv);
+        // let pixel: u32 = 0xffffffff;
+        let mut new_pixel = 0xff000000;
+        for i in 0..3 {
+            let mut part = ((pixel >> (8 * i)) & 0xff) as f32;
+            part *= intensity.abs();
+            new_pixel |= ((part.clamp(0.0, 255.0) as u32) & 0xff) << (8 * i)
+        }
+        Some(new_pixel)
+    }
 }
 
 fn main() {
     let mut model = Model::new("./obj/african_head.obj");
     model.load_diffuse_map("./obj/african_head_diffuse.ppm");
+    model.load_normal_map("./obj/african_head_nm.ppm");
     let model = model;
+    let nfaces = model.nfaces();
     let mut buffer = [0u32; WIDTH as usize * HEIGHT as usize];
     let mut z_buffer = [f32::MIN; WIDTH as usize * HEIGHT as usize];
 
     let mut renderer = Renderer::new(&mut buffer, &mut z_buffer, WIDTH, HEIGHT);
-    let light_dir = Vector3::new(1.0, -1.0, 1.0);
-    let eye = Vector3::new(0.5, 0.5, 1.0);
+    let light_dir = Vector3::new(-1.0, -1.0, -1.0).normalize();
+    let eye = Vector3::new(1.0, 1.0, 3.0);
     let center = Vector3::new(0.0, 0.0, 0.0);
+    let up = Vector3::new(0.0, 1.0, 0.0);
 
-    let model_view = lookat(&eye, &center, &Vector3::new(0.0, 1.0, 0.0));
+    let model_view = lookat(&eye, &center, &up);
 
-    let mut projection = Matrix4::identity();
-    projection[3][2] = -1.0 / (eye - center).length();
+    let projection = renderer::projection(-1.0 / (eye - center).length());
 
     let viewport = viewport(
         WIDTH as f32 / 8.0,
         HEIGHT as f32 / 8.0,
         WIDTH as f32 * 3.0 / 4.0,
         HEIGHT as f32 * 3.0 / 4.0,
+        DEPTH as f32,
     );
 
     let transform = viewport * projection * model_view;
     // let transform = viewport * projection;
 
+    let mut shader = GouraudShader {
+        model,
+        transform,
+        light_dir,
+        varying_uv: Matrix::zero(),
+    };
+
     renderer.fill(0xff000000);
-    for i in 0..model.nfaces() {
+    for i in 0..nfaces {
         let mut screen_coords = Vec::with_capacity(3);
-        let mut intensities = Vec::with_capacity(3);
         for j in 0..3 {
-            let v = model.vert(i, j);
-            screen_coords.push(m2v(&(&transform * v2m(&v))));
-            intensities.push(model.normal(i, j).normalize().dot(&light_dir));
+            screen_coords.push(shader.vertex(i, j));
         }
-        renderer.fill_triangle(&screen_coords, |bc| {
-            let mut uv = Vector2::zero();
-            let mut intensity = 0.0;
-            for j in 0..3 {
-                let c_uv = model.uv(i, j);
-                uv[0] += c_uv[0] * bc[j];
-                uv[1] += c_uv[1] * bc[j];
-                intensity += intensities[j] * bc[j];
-            }
-            let pixel: u32 = if let Some(ref diffuse_map) = model.diffuse_map {
-                let x = uv.x() * diffuse_map.width as f32;
-                let y = uv.y() * diffuse_map.height as f32;
-                diffuse_map.buffer[x as usize + y as usize * diffuse_map.width as usize]
-            } else {
-                0xffffffff
-            };
-            let mut new_pixel = 0xff000000;
-            for i in 0..3 {
-                let mut part = ((pixel >> (8 * i)) & 0xff) as f32;
-                part *= intensity.abs();
-                new_pixel |= ((part.clamp(0.0, 255.0) as u32) & 0xff) << (8 * i)
-            }
-            new_pixel
-        });
+        renderer.fill_triangle(&screen_coords, &mut shader);
     }
     renderer.save_to_ppm_file("output/black.ppm").unwrap();
 }

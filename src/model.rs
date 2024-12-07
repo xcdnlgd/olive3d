@@ -16,7 +16,18 @@ pub struct Model {
     facet_vrt: Vec<usize>,
     facet_tex: Vec<usize>, // per-triangle indices in the above arrays
     facet_nrm: Vec<usize>,
-    pub diffuse_map: Option<Image>,
+    diffuse_map: Option<Image>,
+    normal_map: Option<Image>,
+}
+
+macro_rules! load_map {
+    ($func_name:ident, $map_field:ident) => {
+        pub fn $func_name(&mut self, path: impl AsRef<std::path::Path>) {
+            let mut img = load_ppm_file_to_buffer(path);
+            img.vflip();
+            self.$map_field = Some(img);
+        }
+    };
 }
 
 impl Model {
@@ -84,13 +95,11 @@ impl Model {
             facet_tex,
             facet_nrm,
             diffuse_map: None,
+            normal_map: None,
         }
     }
-    pub fn load_diffuse_map(&mut self, path: impl AsRef<Path>) {
-        let mut img = load_ppm_file_to_buffer(path);
-        img.vflip();
-        self.diffuse_map = Some(img);
-    }
+    load_map!(load_diffuse_map, diffuse_map);
+    load_map!(load_normal_map, normal_map);
     pub fn nverts(&self) -> usize {
         self.verts.len()
     }
@@ -103,7 +112,34 @@ impl Model {
     pub fn uv(&self, iface: usize, nthvert: usize) -> Vector2 {
         self.tex_coord[self.facet_tex[iface * 3 + nthvert]].clone()
     }
-    pub fn normal(&self, iface: usize, nthvert: usize) -> Vector3 {
+    pub fn normal_vert(&self, iface: usize, nthvert: usize) -> Vector3 {
         self.norms[self.facet_nrm[iface * 3 + nthvert]].clone()
+    }
+    pub fn normal_uv(&self, uv: &Vector2) -> Vector3 {
+        if let Some(ref normal_map) = self.normal_map {
+            let x = uv.x() * normal_map.width as f32;
+            let y = uv.y() * normal_map.height as f32;
+            let pixel = normal_map.buffer[x as usize + y as usize * normal_map.width as usize];
+            if pixel == 0xff000000 {
+                Vector3::zero()
+            } else {
+                let r = (pixel & 0xff) as f32;
+                let g = ((pixel >> 8) & 0xff) as f32;
+                let b = ((pixel >> 16) & 0xff) as f32;
+                Vector3::new(r, g, b) * 2.0 / 255.0 - Vector3::new(1.0, 1.0, 1.0)
+            }
+        } else {
+            Vector3::zero()
+        }
+    }
+    pub fn diffuse(&self, uv: &Vector2) -> u32 {
+        let pixel: u32 = if let Some(ref diffuse_map) = self.diffuse_map {
+            let x = uv.x() * diffuse_map.width as f32;
+            let y = uv.y() * diffuse_map.height as f32;
+            diffuse_map.buffer[x as usize + y as usize * diffuse_map.width as usize]
+        } else {
+            0xffffffff
+        };
+        pixel
     }
 }

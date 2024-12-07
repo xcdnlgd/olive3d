@@ -233,6 +233,13 @@ impl<const D: usize> Vector<D> {
     pub fn normalize(&self) -> Self {
         self / self.length()
     }
+    pub fn dot(&self, rhs: &Vector<D>) -> f32 {
+        let mut result = 0.0;
+        for i in 0..D {
+            result += self.data[i] * rhs.data[i];
+        }
+        result
+    }
 }
 
 impl<const D: usize> Index<usize> for Vector<D> {
@@ -270,18 +277,6 @@ macro_rules! impl_bin_op {
         }
     };
 }
-
-impl<const D: usize> Dot<&Vector<D>> for &Vector<D> {
-    type Output = f32;
-    fn dot(self, rhs: &Vector<D>) -> Self::Output {
-        let mut result = 0.0;
-        for i in 0..D {
-            result += self.data[i] * rhs.data[i];
-        }
-        result
-    }
-}
-impl_bin_op!(impl<const D: usize> Dot<Vector<D>> for Vector<D>, dot, f32);
 
 impl<const D: usize> Add<&Vector<D>> for &Vector<D> {
     type Output = Vector<D>;
@@ -365,16 +360,14 @@ impl_vector_methods!(Vector2, x, y);
 impl_vector_methods!(Vector3, x, y, z);
 impl_vector_methods!(Vector4, x, y, z, w);
 
-impl Cross<&Vector3> for &Vector3 {
-    type Output = Vector3;
-    fn cross(self, rhs: &Vector3) -> Self::Output {
+impl Vector3 {
+    pub fn cross(&self, rhs: &Vector3) -> Self {
         let x = self.y() * rhs.z() - self.z() * rhs.y();
         let y = self.z() * rhs.x() - self.x() * rhs.z();
         let z = self.x() * rhs.y() - self.y() * rhs.x();
-        Self::Output::new(x, y, z)
+        Self::new(x, y, z)
     }
 }
-impl_bin_op!(impl Cross<Vector3> for Vector3, cross, Vector3);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Matrix<const R: usize, const C: usize> {
@@ -391,6 +384,19 @@ impl<const R: usize, const C: usize> Matrix<R, C> {
     #[inline]
     pub fn from_rows(rows: [[f32; C]; R]) -> Self {
         Self::from(rows)
+    }
+    #[inline]
+    pub fn set_row(&mut self, r: usize, row_vec: Vector<C>) {
+        self.rows[r] = row_vec.data;
+    }
+}
+impl<const C: usize> Matrix<1, C> {
+    #[inline]
+    pub fn from_row_vector(row_vector: Vector<C>) -> Matrix<1, C> {
+        Matrix::from([row_vector.data])
+    }
+    pub fn to_row_vector(self) -> Vector<C> {
+        Vector { data: self[0] }
     }
 }
 impl<const N: usize> Matrix<N, N> {
@@ -450,3 +456,17 @@ impl_bin_op!(impl<const A: usize, const B: usize, const C: usize> Mul<Matrix<B, 
 pub type Matrix2 = Matrix<2, 2>;
 pub type Matrix3 = Matrix<3, 3>;
 pub type Matrix4 = Matrix<4, 4>;
+
+pub fn m2v(m: &Matrix<4, 1>) -> Vector3 {
+    Vector3::new(m[0][0] / m[3][0], m[1][0] / m[3][0], m[2][0] / m[3][0])
+}
+
+#[rustfmt::skip]
+pub fn v2m(v: &Vector3) -> Matrix<4, 1> {
+    [
+        [v.x()],
+        [v.y()],
+        [v.z()],
+        [  1.0],
+    ].into()
+}
