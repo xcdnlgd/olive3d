@@ -68,7 +68,7 @@ impl<'b> Renderer<'b> {
         for y in y_min..y_max {
             for x in x_min..x_max {
                 // TODO: why it doesn't consider z
-                let bc = barycentric(
+                let mut bc = barycentric(
                     x as f32 + 0.5,
                     y as f32 + 0.5,
                     verts[0].x(),
@@ -83,9 +83,14 @@ impl<'b> Renderer<'b> {
                 }
                 let mut z = 0.0;
                 for i in 0..3 {
-                    z += verts[i].z() * bc[i]
+                    bc[i] /= verts[i].z();
+                    z += bc[i];
                 }
+                let z = 1.0 / z;
                 if self.z_buffer[(x + y * self.stride) as usize] < z {
+                    for i in 0..3 {
+                        bc[i] *= z;
+                    }
                     self.z_buffer[(x + y * self.stride) as usize] = z;
                     if let Some(color) = shader.fregment(&bc) {
                         self.draw_pixel_unchecked(x, y, color);
