@@ -50,34 +50,41 @@ fn get_timer() -> impl FnMut() -> f32 {
 #[cfg(feature = "sdl")]
 fn main() {
     init();
-    use sdl2::event::Event;
-    use sdl2::keyboard::Keycode;
-    use sdl2::{render::Canvas, video::Window, Sdl};
+    use sdl3::event::Event;
+    use sdl3::keyboard::Keycode;
+    use sdl3::{render::Canvas, video::Window, Sdl};
     fn create_canvase(sdl: &Sdl) -> Canvas<Window> {
         let video_subsystem = sdl.video().unwrap();
 
         let window = video_subsystem
-            .window("rust-sdl2 demo", WIDTH, HEIGHT)
+            .window("rust-sdl3 demo", WIDTH, HEIGHT)
             .position_centered()
             .build()
             .unwrap();
 
-        window.into_canvas().build().unwrap()
+        window.into_canvas()
     }
     fn show(buffer: &[u32], canvas: &mut Canvas<Window>) {
         use bytemuck::cast_slice;
-        use sdl2::pixels::PixelFormatEnum::ABGR8888;
+        use sdl3::pixels::PixelFormat;
+        use sdl3::pixels::PixelMasks;
         let pitch = (WIDTH * 4) as usize;
         let texture_creator = canvas.texture_creator();
         let mut texture = texture_creator
-            .create_texture_target(ABGR8888, WIDTH, HEIGHT)
+            .create_texture_target(PixelFormat::from_masks(PixelMasks {
+                bpp: 32,
+                rmask: 0x000000ff,
+                gmask: 0x0000ff00,
+                bmask: 0x00ff0000,
+                amask: 0xff000000,
+            }), WIDTH, HEIGHT)
             .unwrap();
         texture.update(None, cast_slice(buffer), pitch).unwrap();
         canvas.copy(&texture, None, None).unwrap();
         canvas.present();
     }
-    sdl2::hint::set("SDL_VIDEODRIVER", "wayland,x11");
-    let sdl_context = sdl2::init().unwrap();
+    sdl3::hint::set("SDL_VIDEODRIVER", "wayland,x11");
+    let sdl_context = sdl3::init().unwrap();
     let mut canvas = create_canvase(&sdl_context);
 
     let mut buffer = [0u32; WIDTH as usize * HEIGHT as usize];
