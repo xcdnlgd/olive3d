@@ -83,7 +83,7 @@ fn main() {
         canvas.copy(&texture, None, None).unwrap();
         canvas.present();
     }
-    sdl3::hint::set("SDL_VIDEODRIVER", "wayland,x11");
+    sdl3::hint::set("SDL_VIDEO_DRIVER", "wayland,x11");
     let sdl_context = sdl3::init().unwrap();
     let mut canvas = create_canvase(&sdl_context);
 
