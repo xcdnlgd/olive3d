@@ -18,6 +18,7 @@ pub struct Model {
     facet_nrm: Vec<usize>,
     diffuse_map: Option<Image>,
     normal_map: Option<Image>,
+    specular_map: Option<Image>,
 }
 
 macro_rules! load_map {
@@ -96,10 +97,12 @@ impl Model {
             facet_nrm,
             diffuse_map: None,
             normal_map: None,
+            specular_map: None,
         }
     }
     load_map!(load_diffuse_map, diffuse_map);
     load_map!(load_normal_map, normal_map);
+    load_map!(load_specular_map, specular_map);
     pub fn nverts(&self) -> usize {
         self.verts.len()
     }
@@ -141,5 +144,15 @@ impl Model {
             0xffffffff
         };
         pixel
+    }
+    pub fn specular(&self, uv: &Vector2) -> f32 {
+        let pixel: u32 = if let Some(ref specular_map) = self.specular_map {
+            let x = uv.x() * specular_map.width as f32;
+            let y = uv.y() * specular_map.height as f32;
+            specular_map.buffer[x as usize + y as usize * specular_map.width as usize]
+        } else {
+            0xffffffff
+        };
+        ((pixel) & 0xff) as f32
     }
 }

@@ -14,6 +14,7 @@ struct GouraudShader {
     model: Model,
     transform: Matrix4,
     light_dir: Vector3,
+    camera_dir: Vector3,
     varying_uv: Matrix<3, 2>,
 }
 impl Shader for GouraudShader {
@@ -27,13 +28,18 @@ impl Shader for GouraudShader {
     fn fregment(&mut self, bc: &Vector3) -> Option<u32> {
         let uv = (Matrix::from_row_vector(bc.clone()) * &self.varying_uv).to_row_vector();
         let n = self.model.normal_uv(&uv).normalize();
-        let intensity = n.dot(&self.light_dir).neg().max(0.0);
+        let l = self.light_dir.normalize();
+        let r = ((2.0 * n.dot(&l) * &n) - &l).normalize();
+        let ambient_component = 5.0;
+        let diffuse_compoent = n.dot(&l).neg().max(0.0);
+        let specular_compoent = (r.dot(&self.camera_dir)).max(0.0).powf(self.model.specular(&uv));
         let pixel: u32 = self.model.diffuse(&uv);
         // let pixel: u32 = 0xffffffff;
         let mut new_pixel = 0xff000000;
         for i in 0..3 {
             let mut part = ((pixel >> (8 * i)) & 0xff) as f32;
-            part *= intensity.abs();
+            part *= diffuse_compoent + 0.6 * specular_compoent;
+            part += ambient_component;
             new_pixel |= ((part.clamp(0.0, 255.0) as u32) & 0xff) << (8 * i)
         }
         Some(new_pixel)
@@ -44,16 +50,18 @@ fn main() {
     let mut model = Model::new("./obj/african_head.obj");
     model.load_diffuse_map("./obj/african_head_diffuse.ppm");
     model.load_normal_map("./obj/african_head_nm.ppm");
+    model.load_specular_map("./obj/african_head_spec.ppm");
     let model = model;
     let nfaces = model.nfaces();
     let mut buffer = [0u32; WIDTH as usize * HEIGHT as usize];
     let mut z_buffer = [f32::MIN; WIDTH as usize * HEIGHT as usize];
 
     let mut renderer = Renderer::new(&mut buffer, &mut z_buffer, WIDTH, HEIGHT);
-    let light_dir = Vector3::new(-1.0, -1.0, -1.0).normalize();
+    let light_dir = Vector3::new(-1.0, -1.0, 0.0).normalize();
     let eye = Vector3::new(1.0, 1.0, 3.0);
     let center = Vector3::new(0.0, 0.0, 0.0);
     let up = Vector3::new(0.0, 1.0, 0.0);
+    let camera_dir = (&center - &eye).normalize();
 
     let model_view = lookat(&eye, &center, &up);
 
@@ -74,6 +82,7 @@ fn main() {
         model,
         transform,
         light_dir,
+        camera_dir,
         varying_uv: Matrix::zero(),
     };
 

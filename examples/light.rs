@@ -15,6 +15,7 @@ struct GouraudShader<'a> {
     model: &'a Model,
     transform: Matrix4,
     light_dir: Vector3,
+    camera_dir: Vector3,
     varying_uv: Matrix<3, 2>,
 }
 impl Shader for GouraudShader<'_> {
@@ -28,13 +29,18 @@ impl Shader for GouraudShader<'_> {
     fn fregment(&mut self, bc: &Vector3) -> Option<u32> {
         let uv = (Matrix::from_row_vector(bc.clone()) * &self.varying_uv).to_row_vector();
         let n = self.model.normal_uv(&uv).normalize();
-        let intensity = n.dot(&self.light_dir).neg().max(0.0);
-        // let pixel: u32 = self.model.diffuse(&uv);
-        let pixel: u32 = 0xffffffff;
+        let l = self.light_dir.normalize();
+        let r = ((2.0 * n.dot(&l) * &n) - &l).normalize();
+        let ambient_component = 5.0;
+        let diffuse_compoent = n.dot(&l).neg().max(0.0);
+        let specular_compoent = (r.dot(&self.camera_dir)).max(0.0).powf(self.model.specular(&uv));
+        let pixel: u32 = self.model.diffuse(&uv);
+        // let pixel: u32 = 0xffffffff;
         let mut new_pixel = 0xff000000;
         for i in 0..3 {
             let mut part = ((pixel >> (8 * i)) & 0xff) as f32;
-            part *= intensity.abs();
+            part *= diffuse_compoent + 0.6 * specular_compoent;
+            part += ambient_component;
             new_pixel |= ((part.clamp(0.0, 255.0) as u32) & 0xff) << (8 * i)
         }
         Some(new_pixel)
@@ -46,6 +52,7 @@ lazy_static! {
         let mut model = Model::new("./obj/african_head.obj");
         model.load_diffuse_map("./obj/african_head_diffuse.ppm");
         model.load_normal_map("./obj/african_head_nm.ppm");
+        model.load_specular_map("./obj/african_head_spec.ppm");
         model
     };
     static ref transform: Matrix4 = {
@@ -76,6 +83,7 @@ pub fn render(buffer: &mut [u32], z_buffer: &mut [f32], dt: f32) {
     let mut shader = GouraudShader {
         model: &MODEL,
         light_dir,
+        camera_dir: Vector3::new(0.0, 0.0, -1.0).normalize(),
         transform: transform.to_owned(),
         varying_uv: Matrix::zero(),
     };
